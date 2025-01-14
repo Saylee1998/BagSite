@@ -7,49 +7,54 @@ const registerUser = async (req, res) => {
     try {
         const { email, password, fullname } = req.body;
 
-        const user = await User.findOne({email:email});
-        if(user) return res.send("Account already exists!Please login");
-
-
+        const userExists = await User.findOne({ email });
+        if (userExists) {
+            return res.status(400).send("Account already exists! Please login.");
+        }
 
         bcrypt.genSalt(10, (err, salt) => {
             bcrypt.hash(password, salt, async (err, hash) => {
-                if (err) return res.send(err.message);
-                else {
-                    const user = await User.create({
-                        email,
-                        password: hash,
-                        fullname
-                    });
-                    //res.status(201).json({ message: "User registered successfully", user });
-                    const token = generateToken(user);
-                    res.cookie("token",token);
-                    res.send("user created successfully");
-                }
-            })
+                if (err) return res.status(500).send(err.message);
 
+                const newUser = new User({
+                    email,
+                    password: hash,
+                    fullname
+                });
+
+                await newUser.save();
+
+                const token = generateToken(newUser);
+                res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production" });
+                res.status(201).send("User created successfully.");
+            });
         });
     } catch (err) {
-        console.log(err.message);
+        console.error(err.message);
         res.status(500).json({ error: "Internal server error" });
     }
-}
+};
 
-const loginUser = async(req, res)=>{
-    const {email,password}= req.body;
-    const user = await User.findOne({email:email});
+const loginUser = async (req, res) => {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
 
-    if(!user) return res.send("Email or password incorrect");
+    if (!user) return res.status(400).send("Email or password incorrect.");
 
-    bcrypt.compare(password,user.password,(err,result)=>{
-        if(result){
+    bcrypt.compare(password, user.password, (err, result) => {
+        if (result) {
             const token = generateToken(user);
-            res.cookie("token",token);
-            res.send("u can login");
-        } else{
-            res.send("Email or password incorrect");
+            res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production" });
+            res.redirect("/shop");
+        } else {
+            res.status(400).send("Email or password incorrect.");
         }
     });
-}
+};
 
-export {registerUser,loginUser};
+const logout = (req,res)=>{
+    res.cookie("token",token);
+    res.redirect("/");
+};
+
+export { registerUser, loginUser,logout };
